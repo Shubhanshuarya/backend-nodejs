@@ -36,8 +36,52 @@ exports.createClient = async (req, res) => {
 // Get all clients
 exports.getAllClients = async (req, res) => {
   try {
-    const clients = await Client.find();
-    res.status(200).json(clients);
+    // Find the agency with the top client(s) with maximum total bill
+    const agency = await Agency.aggregate([
+      {
+        $lookup: {
+          from: "clients",
+          localField: "_id",
+          foreignField: "AgencyId",
+          as: "clients",
+        },
+      },
+      {
+        $unwind: "$clients",
+      },
+      {
+        $group: {
+          _id: '$_id',
+          AgencyName: { $first: '$Name' },
+          topClient: {
+            $push: {
+              ClientName: '$clients.Name',
+              TotalBill: '$clients.TotalBill',
+            },
+          },
+          maxTotalBill: { $max: '$clients.TotalBill' }, // Add this line
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          AgencyName: 1,
+          topClient: {
+            $filter: {
+              input: '$topClient',
+              as: 'client',
+              cond: { $eq: ['$$client.TotalBill', '$maxTotalBill'] }, // Add this line
+            },
+          },
+        },
+      },
+    ]);
+
+    if (agency.length === 0) {
+      return res.status(404).json({ error: "No agencies found" });
+    }
+
+    res.status(200).json(agency[0]);
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
@@ -125,61 +169,3 @@ exports.createAgencyClient = async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
-exports.topClient = async (req, res) => {
-    try {
-        // Find the agency with the top client(s) with maximum total bill
-        const agency = await Agency.aggregate([
-          {
-            $lookup: {
-              from: 'clients',
-              localField: '_id',
-              foreignField: 'AgencyId',
-              as: 'clients',
-            },
-          },
-          {
-            $unwind: '$clients',
-          },
-          {
-            $group: {
-              _id: '$_id',
-              AgencyName: { $first: '$Name' },
-              topClient: {
-                $push: {
-                  ClientName: '$clients.Name',
-                  TotalBill: '$clients.TotalBill',
-                },
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              AgencyName: 1,
-              topClient: {
-                $reduce: {
-                  input: '$topClient',
-                  initialValue: [],
-                  in: {
-                    $cond: [
-                      { $eq: ['$topClient.TotalBill', { $max: '$topClient.TotalBill' }] },
-                      { $concatArrays: ['$$value', ['$$this']] },
-                      '$$value',
-                    ],
-                  },
-                },
-              },
-            },
-          },
-        ]);
-    
-        if (agency.length === 0) {
-          return res.status(404).json({ error: 'No agencies found' });
-        }
-    
-        res.status(200).json(agency[0]);
-      } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-      }
-}

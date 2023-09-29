@@ -7,9 +7,8 @@ const { verifyToken } = require('./middleware');
 router.post('/create', clientController.createClient);
 router.get('/', clientController.getAllClients);
 router.get('/:id', clientController.getClientById);
-router.put('/:id', clientController.updateClient);D
+router.put('/:id', clientController.updateClient);
 router.delete('/:id', clientController.deleteClient);
 router.post('/createAgencyClient', verifyToken, clientController.createAgencyClient);
-router.get('/topClient', clientController.topClient);
 
 module.exports = router;
